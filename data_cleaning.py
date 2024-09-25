@@ -1,39 +1,76 @@
-# data_cleaning.py
-
 import pandas as pd
 import re
 
-# File paths
-input_file = "psychological_concepts_with_verses.csv"
-output_file = "cleaned_verses.csv"
+def extract_verse_info(text):
+    surah_match = re.search(r'Surah:\s*(.*?)(?:\n|$)', text, re.IGNORECASE)
+    verse_match = re.search(r'Verse:\s*(.*?)(?:\n|Translation:)', text, re.IGNORECASE | re.DOTALL)
+    translation_match = re.search(r'Translation:\s*"?(.*?)"?(?:\n|Relation to concept:)', text, re.IGNORECASE | re.DOTALL)
+    relation_match = re.search(r'Relation to concept:\s*(.*)', text, re.IGNORECASE | re.DOTALL)
 
-# Read the CSV file into a DataFrame
-df = pd.read_csv(input_file)
+    surah = surah_match.group(1).strip() if surah_match else ''
+    verse = verse_match.group(1).strip() if verse_match else ''
+    translation = translation_match.group(1).strip() if translation_match else ''
+    relation = relation_match.group(1).strip() if relation_match else ''
 
-# Define a function to clean and split the "Matching_Verse" column into four separate columns
-def extract_columns(matching_verse):
-    # Regular expression pattern to extract Surah, Verse, Translation, and Relation to Concept
-    pattern = r"Surah:\s*(.*?)[\n,]*Verse:\s*(\d+).*?Translation:\s*\"(.*?)\""
-    match = re.search(pattern, matching_verse, re.DOTALL)
+    # Clean up verse number
+    verse = re.sub(r'\s*:\s*', ':', verse)  # Remove spaces around colon
+    verse = re.sub(r'(\d+):(\d+):00', r'\1:\2', verse)  # Remove :00 from end
+    verse = re.sub(r'\[(\d+):(\d+)\]', r'\1:\2', verse)  # Remove square brackets
+    verse = re.sub(r'(\d+)\.(\d+)', r'\1:\2', verse)  # Replace dot with colon
+
+    return surah, verse, translation, relation
+
+def clean_text(text):
+    # Remove extra spaces and newlines
+    text = re.sub(r'\s+', ' ', text).strip()
+    # Remove any remaining quotes
+    text = text.replace('"', '').replace("'", "")
+    return text
+
+def process_row(row):
+    matching_verse = row['Matching_Verse']
+    surah, verse, translation, relation = extract_verse_info(matching_verse)
     
-    if match:
-        surah = match.group(1)
-        verse = match.group(2)
-        translation = match.group(3)
-        # Assuming Relation to Concept is already captured in the description of the concept
-        relation = "Related to psychological concept"
-        return pd.Series([surah, verse, translation, relation])
-    else:
-        # Return None values if the pattern doesn't match
-        return pd.Series([None, None, None, None])
+    return {
+        'Concept': clean_text(row['Concept']),
+        'Category': clean_text(row['Category']),
+        'Description': clean_text(row['Description']),
+        'Surah': clean_text(surah),
+        'Verse': clean_text(verse),
+        'Translation': clean_text(translation),
+        'Relation': clean_text(relation)
+    }
 
-# Apply the function to each row in the "Matching_Verse" column
-df[['Surah', 'Verse', 'Translation', 'Relation to Concept']] = df['Matching_Verse'].apply(extract_columns)
+def main():
+    # Load the CSV file
+    input_file = 'psychological_concepts_with_verses.csv'
+    output_file = 'cleaned_psychological_concepts3.csv'
+    
+    print(f"Loading data from {input_file}...")
+    df = pd.read_csv(input_file)
+    
+    print("Processing and cleaning data...")
+    results = []
+    for _, row in df.iterrows():
+        result = process_row(row)
+        results.append(result)
+    
+    # Create a new DataFrame with the processed results
+    result_df = pd.DataFrame(results)
+    
+    # Save the results to a new CSV file
+    print(f"Saving cleaned data to {output_file}...")
+    result_df.to_csv(output_file, index=False)
+    print(f"Processing complete. Results saved to '{output_file}'")
+    
+    # Print some statistics
+    print("\nData cleaning summary:")
+    print(f"Total rows processed: {len(result_df)}")
+    print(f"Rows with empty Surah: {result_df['Surah'].isna().sum()}")
+    print(f"Rows with empty Verse: {result_df['Verse'].isna().sum()}")
+    print(f"Rows with empty Translation: {result_df['Translation'].isna().sum()}")
+    print(f"Rows with empty Relation: {result_df['Relation'].isna().sum()}")
 
-# Drop the original "Matching_Verse" column
-df.drop('Matching_Verse', axis=1, inplace=True)
+if __name__ == "__main__":
+    main()
 
-# Save the cleaned DataFrame to a new CSV file
-df.to_csv(output_file, index=False)
-
-print(f"Data cleaning complete. Cleaned data saved to '{output_file}'.")
