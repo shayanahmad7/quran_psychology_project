@@ -2,6 +2,30 @@
 
 This project aims to create a database that matches psychological concepts with relevant verses from the Quran. It involves web scraping, data processing, API interactions, and a user interface for exploring the final dataset.
 
+## Uniqueness and Value of the Dataset
+
+This dataset, which matches psychological concepts with relevant Quranic verses, is not readily available for several reasons:
+
+1. Interdisciplinary Nature: The combination of modern psychological concepts with ancient religious texts requires expertise in both fields, which is relatively uncommon.
+
+2. Manual Curation and AI Assistance: Our process involves web scraping, AI-assisted matching (using GPT-3.5), and manual verification, creating a unique blend of automation and human oversight.
+
+3. Specific Focus: While there are datasets for psychological concepts and Quranic verses separately, a dataset that meaningfully connects the two is novel.
+
+4. Continuous Updates: Psychological understanding evolves, and interpretations of religious texts can vary. Our methodology allows for regular updates to reflect current understanding.
+
+5. Ethical Considerations: Creating such a dataset requires careful consideration of cultural sensitivities and diverse interpretations, which we have addressed in our ETHICS.md file.
+
+The value this dataset provides to users includes:
+
+- Bridging Psychology and Islamic Studies: Researchers, educators, and students in both fields can explore connections between modern psychological concepts and Quranic teachings.
+- Therapeutic Applications: Mental health professionals working with Muslim clients might find this resource helpful in integrating faith-based perspectives into therapy.
+- Comparative Studies: Scholars of comparative religion or cultural psychology can use this dataset to analyze how psychological concepts are reflected in Islamic scripture.
+- Personal Development: Individuals interested in self-improvement can explore how psychological principles align with Quranic guidance.
+- Educational Tool: It serves as a unique resource for courses in Islamic psychology, comparative religion, or cultural studies.
+
+By providing these connections, our dataset saves time for researchers and offers a starting point for deeper exploration of the relationship between psychology and Islamic teachings.
+
 ## Project Structure
 
 1. `scraping.py`: Scrapes psychological concepts from a website.
@@ -17,17 +41,16 @@ This project aims to create a database that matches psychological concepts with 
 
 2. Create a virtual environment and activate it:
    `python -m venv venv
-   source venv/bin/activate`
+source venv/bin/activate`
 
    On Windows,use
    `venv\Scripts\activate`
 
-4. Install the required packages:
+3. Install the required packages:
    `pip install -r requirements.txt`
 
-5. Create a `.env` file in the project root and add your OpenAI API key:
+4. Create a `.env` file in the project root and add your OpenAI API key:
    `OPENAI_API_KEY=your_api_key_here`
-
 
 ## Running the Project
 
@@ -39,12 +62,12 @@ Follow these steps in order:
 This will create `psychological_concepts.csv`.
 
 2. Match concepts with Quranic verses:
-  `python verse_matching.py`
+   `python verse_matching.py`
 
 This will create `psychological_concepts_with_verses.csv`.
 
 3. Clean and structure the data:
-  `python data_cleaning.py`
+   `python data_cleaning.py`
 
 This will create `cleaned_psychological_concepts.csv`.
 
