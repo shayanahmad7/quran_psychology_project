@@ -1,95 +1,123 @@
 import requests
 import pandas as pd
-import json
 import time
+import re
+import logging
 
-def get_verse_details(surah_name, verse_number):
-    url = "https://api.quran.com/api/v4/verses/by_key"
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def get_verse_details(surah, verse):
+    url = f"https://api.quran.com/api/v4/quran/verses/uthmani"
     params = {
-        "language": "en",
-        "words": "true",
-        "word_fields": "text_uthmani",
-        "audio": "1",
-        "verse_key": f"{surah_name}:{verse_number}"
+        "verse_key": f"{surah}:{verse}",
     }
     max_retries = 3
     for attempt in range(max_retries):
         try:
             response = requests.get(url, params=params)
-            response.raise_for_status()  # Raise an exception for bad status codes
-            data = response.json()['verse']
-            return {
-                'arabic_text': data['text_uthmani'],
-                'audio_url': data['audio']['url'] if data['audio'] else '',
-            }
+            response.raise_for_status()
+            data = response.json()
+            verses = data.get('verses', [])
+            if verses:
+                verse_data = verses[0]
+                arabic_text = verse_data.get('text_uthmani', '')
+                
+                # Get audio information
+                audio_url = f"https://verses.quran.com/{surah}/{verse}.mp3"
+                
+                logging.info(f"Successfully fetched data for {surah}:{verse}")
+                return {
+                    'arabic_text': arabic_text,
+                    'audio_url': audio_url,
+                }
+            else:
+                logging.warning(f"No verse data found for {surah}:{verse}")
+                return {'arabic_text': '', 'audio_url': ''}
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching verse details for {surah_name}:{verse_number} (Attempt {attempt + 1}/{max_retries}): {e}")
+            logging.error(f"Error fetching verse details for {surah}:{verse} (Attempt {attempt + 1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
                 return {'arabic_text': '', 'audio_url': ''}
-            time.sleep(2)  # Wait for 2 seconds before retrying
+            time.sleep(2)
 
-def get_tafsir_link(surah_name, verse_number):
-    return f"https://quran.com/{surah_name}/{verse_number}/tafsirs/en-tafsir-ibn-kathir"
+def get_tafsir_link(surah, verse):
+    return f"https://quran.com/{surah}/{verse}/tafsirs/en-tafsir-ibn-kathir"
 
-def extract_surah_verse(text):
-    try:
-        parts = text.split(':')
-        return int(parts[0]), int(parts[1])
-    except (ValueError, IndexError):
-        return None, None
-
-def process_verses(df):
-    results = []
-    for _, row in df.iterrows():
-        try:
-            # Try to extract Surah and Verse from the 'Verse' column
-            surah, verse = extract_surah_verse(str(row['Verse']))
-            
-            if surah is None or verse is None:
-                # If extraction fails, search for Surah:Verse pattern in all columns
-                for col in df.columns[3:]:  # Start from the 4th column (after Description)
-                    surah, verse = extract_surah_verse(str(row[col]))
-                    if surah is not None and verse is not None:
-                        break
-            
-            if surah is not None and verse is not None:
-                verse_details = get_verse_details(surah, verse)
-                tafsir_link = get_tafsir_link(surah, verse)
-            else:
-                print(f"Could not find valid Surah:Verse for concept: {row['Concept']}")
-                verse_details = {'arabic_text': '', 'audio_url': ''}
-                tafsir_link = ''
-            
-            results.append({
-                'Concept': row['Concept'],
-                'Category': row['Category'],
-                'Description': row['Description'],
-                'Surah': surah,
-                'Verse': verse,
-                'Translation': row['Translation'] if 'Translation' in row else '',
-                'Relation': row['Relation'] if 'Relation' in row else '',
-                'Arabic_Text': verse_details['arabic_text'],
-                'Tafsir_Link': tafsir_link,
-                'Audio_URL': verse_details['audio_url']
-            })
-        except Exception as e:
-            print(f"Error processing row for concept {row['Concept']}: {e}")
+def extract_verse_info(row):
+    surah = row.get('Surah', '')
+    verse = row.get('Verse', '')
+    translation = row.get('Translation', '')
     
-    return pd.DataFrame(results)
+    if surah and verse:
+        return surah, verse, translation
+    
+    # If Surah and Verse are not separate columns, try to extract from Translation
+    match = re.search(r'(\d+):(\d+)', translation)
+    if match:
+        return match.group(1), match.group(2), translation
+    
+    return None, None, None
+
+def process_row(row):
+    surah, verse, translation = extract_verse_info(row)
+    if surah and verse:
+        verse_details = get_verse_details(surah, verse)
+        tafsir_link = get_tafsir_link(surah, verse)
+        result = {
+            'Surah': surah,
+            'Verse': verse,
+            'Translation': translation,
+            'Arabic_Text': verse_details['arabic_text'],
+            'Audio_URL': verse_details['audio_url'],
+            'Tafsir_Link': tafsir_link
+        }
+        logging.info(f"Processed data: {result}")
+        return result
+    logging.warning(f"No valid Surah:Verse found in row")
+    return {
+        'Surah': '',
+        'Verse': '',
+        'Translation': '',
+        'Arabic_Text': '',
+        'Audio_URL': '',
+        'Tafsir_Link': ''
+    }
 
 def main():
     try:
         # Load the CSV with matched verses
         df = pd.read_csv('processed_psychological_concepts.csv')
+        logging.info(f"Loaded CSV with {len(df)} rows")
         
         # Process the dataframe
-        result_df = process_verses(df)
+        results = []
+        total_rows = len(df)
+        for index, row in df.iterrows():
+            try:
+                logging.info(f"Processing row {index + 1}/{total_rows}")
+                result = process_row(row)
+                full_result = {**row.to_dict(), **result}
+                results.append(full_result)
+                logging.info(f"Completed processing row {index + 1}")
+            except Exception as e:
+                logging.error(f"Error processing row {index + 1}: {e}")
+                results.append(row.to_dict())
+            time.sleep(1)  # Add a delay to avoid overwhelming the API
+        
+        result_df = pd.DataFrame(results)
         
         # Save the results
         result_df.to_csv('final_psychological_concepts_quran_dataset.csv', index=False)
-        print("Processing complete. Results saved to 'final_psychological_concepts_quran_dataset.csv'")
+        logging.info("Processing complete. Results saved to 'final_psychological_concepts_quran_dataset.csv'")
+        
+        # Log column information
+        logging.info(f"Columns in the result DataFrame: {result_df.columns.tolist()}")
+        for col in ['Arabic_Text', 'Audio_URL', 'Tafsir_Link']:
+            non_empty = result_df[col].notna().sum()
+            logging.info(f"Non-empty values in {col}: {non_empty}/{len(result_df)}")
+        
     except Exception as e:
-        print(f"An error occurred in the main function: {e}")
+        logging.error(f"An error occurred in the main function: {e}")
 
 if __name__ == "__main__":
     main()
